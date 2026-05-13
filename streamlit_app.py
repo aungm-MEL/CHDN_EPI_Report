@@ -6,7 +6,6 @@ Runs CHDN_EPI_clean.py followed by chdn_epi_master.py
 import subprocess
 import sys
 from pathlib import Path
-import time
 import streamlit as st
 
 # Page config
@@ -14,12 +13,29 @@ st.set_page_config(page_title="CHDN EPI Pipeline", layout="wide", initial_sideba
 
 # Paths
 SCRIPT_DIR = Path(__file__).resolve().parent
-CHDN_CLEAN_SCRIPT = SCRIPT_DIR / "CHDN_clean" / "CHDN_EPI_clean.py"
+CHDN_CLEAN_SCRIPT_CANDIDATES = [
+    SCRIPT_DIR / "CHDN_EPI_clean.py",
+    SCRIPT_DIR / "CHDN_clean" / "CHDN_EPI_clean.py",
+]
 CHDN_MASTER_SCRIPT = SCRIPT_DIR / "chdn_epi_master.py"
 DATA_FILE = SCRIPT_DIR / "EPI Database_CHDN.xlsx"
-CLEAN_OUTPUT = SCRIPT_DIR / "CHDN_clean" / "CHDN_EPI_clean.xlsx"
+CLEAN_OUTPUT_CANDIDATES = [
+    SCRIPT_DIR / "CHDN_EPI_clean.xlsx",
+    SCRIPT_DIR / "CHDN_clean" / "CHDN_EPI_clean.xlsx",
+]
 MASTER_OUTPUT = SCRIPT_DIR / "CHDN dataset_long.xlsx"
-VENV_PYTHON = Path.cwd().parent.parent / ".venv" / "Scripts" / "python.exe"
+PYTHON_EXE = Path(sys.executable)
+
+
+def first_existing(paths: list[Path]) -> Path | None:
+    for p in paths:
+        if p.exists():
+            return p
+    return None
+
+
+CHDN_CLEAN_SCRIPT = first_existing(CHDN_CLEAN_SCRIPT_CANDIDATES) or CHDN_CLEAN_SCRIPT_CANDIDATES[0]
+CLEAN_OUTPUT = first_existing(CLEAN_OUTPUT_CANDIDATES) or CLEAN_OUTPUT_CANDIDATES[0]
 
 # Session state
 if "step_cleaner_done" not in st.session_state:
@@ -103,7 +119,7 @@ if st.button("▶ Run Full Pipeline", key="btn_pipeline", use_container_width=Tr
                     progress_bar.progress(25, text="Step 1/2: Cleaning dataset...")
                     
                     result = subprocess.run(
-                        [str(VENV_PYTHON), str(CHDN_CLEAN_SCRIPT)],
+                        [str(PYTHON_EXE), str(CHDN_CLEAN_SCRIPT)],
                         cwd=SCRIPT_DIR,
                         capture_output=True,
                         text=True,
@@ -127,7 +143,7 @@ if st.button("▶ Run Full Pipeline", key="btn_pipeline", use_container_width=Tr
                     progress_bar.progress(75, text="Step 2/2: Generating reports...")
                     
                     result = subprocess.run(
-                        [str(VENV_PYTHON), str(CHDN_MASTER_SCRIPT)],
+                        [str(PYTHON_EXE), str(CHDN_MASTER_SCRIPT)],
                         cwd=SCRIPT_DIR,
                         capture_output=True,
                         text=True,
