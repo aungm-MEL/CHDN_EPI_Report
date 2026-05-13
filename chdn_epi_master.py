@@ -1519,12 +1519,14 @@ def step_add_multi_year_td_alod() -> None:
     """Add Td ALOD sheet."""
     print_header("Step 9: Add Td_ALOD Sheet")
     
-    td_alod_source = get_sheet_source_file("Td_ALOD")
-    try:
-        template_df = pd.read_excel(td_alod_source, sheet_name="Td_ALOD", engine="openpyxl")
-    except Exception:
+    td_alod_source, td_alod_sheet = resolve_sheet_path_and_name(
+        ["Td_ALOD"],
+        fuzzy_token="td_alod",
+    )
+    if td_alod_source is None or td_alod_sheet is None:
         print("  No Td_ALOD template found, skipping")
         return
+    template_df = pd.read_excel(td_alod_source, sheet_name=td_alod_sheet, engine="openpyxl")
     
     td_df = pd.read_excel(OUTPUT_FILE, sheet_name="Td")
     chdn_td = td_df[td_df["source"] == "CHDN"].copy()
@@ -1567,13 +1569,26 @@ def step_add_multi_year_alod_cummu() -> None:
 
     print("Reading data...")
     child_df = pd.read_excel(OUTPUT_FILE, sheet_name="EPI-Child-long")
-    alod_cummu_source = get_sheet_source_file("ALOD_cummu")
+    alod_cummu_source, alod_cummu_sheet = resolve_sheet_path_and_name(
+        ["ALOD_cummu"],
+        fuzzy_token="alod",
+    )
+    if alod_cummu_source is None or alod_cummu_sheet is None:
+        print("No ALOD_cummu template sheet found. Skipping Step 10.")
+        return
+
     wb_template = openpyxl.load_workbook(alod_cummu_source)
-    ws_template = wb_template["ALOD_cummu"]
+    try:
+        ws_template = wb_template[alod_cummu_sheet]
+    except KeyError:
+        print("No ALOD_cummu template sheet found. Skipping Step 10.")
+        wb_template.close()
+        return
 
     template_data = []
     for row in ws_template.iter_rows(min_row=1, max_row=ws_template.max_row, values_only=True):
         template_data.append(row)
+    wb_template.close()
     template_df = pd.DataFrame(template_data[1:], columns=template_data[0])
 
     print(f"EPI-Child-long shape: {child_df.shape}")
@@ -1670,8 +1685,11 @@ def step_add_multi_year_idp() -> None:
 
     print("Reading source data and template...")
     child_df = pd.read_excel(OUTPUT_FILE, sheet_name="EPI-Child-long")
-    idp_source = get_sheet_source_file("IDP")
-    template_df = pd.read_excel(idp_source, sheet_name="IDP", engine="openpyxl")
+    idp_source, idp_sheet = resolve_sheet_path_and_name(["IDP"], fuzzy_token="idp")
+    if idp_source is None or idp_sheet is None:
+        print("No IDP template sheet found. Skipping Step 11.")
+        return
+    template_df = pd.read_excel(idp_source, sheet_name=idp_sheet, engine="openpyxl")
 
     print(f"EPI-Child-long shape: {child_df.shape}")
     print(f"Template shape: {template_df.shape}")
@@ -1772,8 +1790,14 @@ def step_add_multi_year_td2_indicator() -> None:
     print_header("Step 12: Add Td2_indicator Sheet")
 
     print("\n1. Reading Td2_indicator template...")
-    td2_source = get_sheet_source_file("Td2_indicator")
-    template_df = pd.read_excel(td2_source, sheet_name="Td2_indicator", engine="openpyxl")
+    td2_source, td2_sheet = resolve_sheet_path_and_name(
+        ["Td2_indicator"],
+        fuzzy_token="td2",
+    )
+    if td2_source is None or td2_sheet is None:
+        print("No Td2_indicator template sheet found. Skipping Step 12.")
+        return
+    template_df = pd.read_excel(td2_source, sheet_name=td2_sheet, engine="openpyxl")
     years_to_process = sorted(template_df["Period"].unique())
     print(f"   Years in template: {years_to_process}")
 
