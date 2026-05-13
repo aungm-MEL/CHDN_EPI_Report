@@ -1,4 +1,4 @@
-﻿import argparse
+import argparse
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -15,7 +15,6 @@ DEFAULT_SOURCE_SHEET = "EPI-Child"
 DEFAULT_TARGET_SHEET = "EPI-Child"
 DEFAULT_PREGNANCY_SOURCE_SHEET = "EPI-Pregnancy"
 DEFAULT_PREGNANCY_TARGET_SHEET = "EPI-Pregnancy"
-DEFAULT_SAMPLE_FILE = Path(__file__).resolve().with_name("sample sheets.xlsx")
 
 COMPLETE_COLUMNS = [
     "CompleteInQ4 2024",
@@ -232,40 +231,170 @@ def _write_sheet_values(src_ws, dst_ws) -> None:
             dst_ws.cell(row=row_num, column=col_idx, value=src_ws.cell(row=row_num, column=col_idx).value)
 
 
-def _add_sample_sheets(out_wb, sample_file: Path | None, sample_sheet_names: list[str] | None = None) -> list[str]:
-    if sample_file is None:
-        return []
-    if not sample_file.exists():
-        print(f"WARNING: Sample workbook not found: {sample_file}")
-        return []
+def _write_rows_sheet(out_wb, sheet_name: str, columns: list[str], rows: list[dict]) -> None:
+    if sheet_name in out_wb.sheetnames:
+        del out_wb[sheet_name]
+    ws = out_wb.create_sheet(title=sheet_name)
 
-    try:
-        sample_wb = load_workbook(sample_file, data_only=True)
-    except Exception as exc:
-        print(f"WARNING: Could not open sample workbook: {exc}")
-        return []
+    for col_idx, col_name in enumerate(columns, start=1):
+        ws.cell(row=1, column=col_idx, value=col_name)
 
-    protected = {DEFAULT_TARGET_SHEET, DEFAULT_PREGNANCY_TARGET_SHEET}
-    requested = sample_sheet_names if sample_sheet_names else sample_wb.sheetnames
-    added: list[str] = []
+    for row_idx, row in enumerate(rows, start=2):
+        for col_idx, col_name in enumerate(columns, start=1):
+            ws.cell(row=row_idx, column=col_idx, value=row.get(col_name))
 
-    for sheet_name in requested:
-        if sheet_name not in sample_wb.sheetnames:
-            print(f"WARNING: Sample sheet not found: {sheet_name}")
-            continue
-        if sheet_name in protected:
-            print(f"INFO: Skipped protected output sheet from sample: {sheet_name}")
-            continue
 
-        if sheet_name in out_wb.sheetnames:
-            del out_wb[sheet_name]
+def _add_default_template_sheets(out_wb) -> list[str]:
+    years = [2024, 2025, 2026]
+    created: list[str] = []
 
-        src_ws = sample_wb[sheet_name]
-        dst_ws = out_wb.create_sheet(title=sheet_name)
-        _write_sheet_values(src_ws, dst_ws)
-        added.append(sheet_name)
+    indicator_names = [
+        "Penta3 under 1-yr-old",
+        "Penta3 under 5-yr-old",
+        "MMR1 under 1-yr-old",
+        "MMR1 under 5-yr-old",
+        "MMR2 under 5-yr-old",
+        "Penta1 under 5-yr-old",
+        "At least one dose under 5-yr-old",
+        "Full dose under 5-yr-old",
+        "Td ALOD",
+        "Td Two Doses",
+    ]
+    quarter_cols = [
+        "Q1 U1 Male",
+        "Q1 U1 Female",
+        "Q1 1-5 Male ",
+        "Q1 1-5 Female",
+        "Q2 U1 Male",
+        "Q2 U1 Female",
+        "Q2 1-5 Male ",
+        "Q2 1-5 Female",
+        "Q3 U1 Male",
+        "Q3 U1 Female",
+        "Q3 1-5 Male ",
+        "Q3 1-5 Female",
+        "Q4 U1 Male",
+        "Q4 U1 Female",
+        "Q4 1-5 Male ",
+        "Q4 1-5 Female",
+    ]
+    indicator_columns = ["Period", "Organization", "Project Name", "indicator"] + quarter_cols
+    indicator_rows = []
+    for year in years:
+        for name in indicator_names:
+            row = {
+                "Period": year,
+                "Organization": "CHDN",
+                "Project Name": "REACH-KK",
+                "indicator": name,
+            }
+            for col in quarter_cols:
+                row[col] = None
+            indicator_rows.append(row)
+    _write_rows_sheet(out_wb, "indicators", indicator_columns, indicator_rows)
+    created.append("indicators")
 
-    return added
+    td_alod_columns = ["Period", "Organization ", "Project Name", "Indicators ", "Annual Achievement"]
+    td_alod_rows = [
+        {
+            "Period": year,
+            "Organization ": "CHDN",
+            "Project Name": "REACH-KK",
+            "Indicators ": "Td ALOD",
+            "Annual Achievement": None,
+        }
+        for year in years
+    ]
+    _write_rows_sheet(out_wb, "Td_ALOD", td_alod_columns, td_alod_rows)
+    created.append("Td_ALOD")
+
+    alod_cummu_columns = [
+        "Period",
+        "Organization ",
+        "Project Name",
+        "Indicator",
+        "Annual U1 Male",
+        "Annaul U1 Female",
+        "Annual 1-5 Male ",
+        "Annual 1-5 Female",
+    ]
+    alod_cummu_rows = [
+        {
+            "Period": year,
+            "Organization ": "CHDN",
+            "Project Name": "REACH-KK",
+            "Indicator": "ALOD cumulative",
+            "Annual U1 Male": None,
+            "Annaul U1 Female": None,
+            "Annual 1-5 Male ": None,
+            "Annual 1-5 Female": None,
+        }
+        for year in years
+    ]
+    _write_rows_sheet(out_wb, "ALOD_cummu", alod_cummu_columns, alod_cummu_rows)
+    created.append("ALOD_cummu")
+
+    idp_columns = [
+        "Period ",
+        "Organization ",
+        "Project Name",
+        "indicator",
+        "Q1 IDP Male ",
+        "Q1 IDP Female",
+        "Q1 non-IDP Male ",
+        "Q1 non-IDP Female",
+        "Q2 IDP Male ",
+        "Q2 IDP Female",
+        "Q2 non-IDP Male ",
+        "Q2 non-IDP Female",
+        "Q3 IDP Male ",
+        "Q3 IDP Female",
+        "Q3 non-IDP Male ",
+        "Q3 non-IDP Female",
+        "Q4 IDP Male ",
+        "Q4 IDP Female",
+        "Q4 non-IDP Male ",
+        "Q4 non-IDP Female",
+    ]
+    idp_rows = [
+        {
+            "Period ": year,
+            "Organization ": "CHDN",
+            "Project Name": "REACH-KK",
+            "indicator": "Penta1 under 5-yr-old",
+        }
+        for year in years
+    ]
+    _write_rows_sheet(out_wb, "IDP", idp_columns, idp_rows)
+    created.append("IDP")
+
+    td2_columns = [
+        "Period",
+        "Organization ",
+        "Project Name",
+        "Indicators ",
+        "Q1 Achievement",
+        "Q2 Achievement",
+        "Q3 Achievement",
+        "Q4 Achievement",
+    ]
+    td2_rows = [
+        {
+            "Period": year,
+            "Organization ": "CHDN",
+            "Project Name": "REACH-KK",
+            "Indicators ": "Td Two Doses",
+            "Q1 Achievement": None,
+            "Q2 Achievement": None,
+            "Q3 Achievement": None,
+            "Q4 Achievement": None,
+        }
+        for year in years
+    ]
+    _write_rows_sheet(out_wb, "Td2_indicator", td2_columns, td2_rows)
+    created.append("Td2_indicator")
+
+    return created
 
 
 def build_clean_sheet(
@@ -275,8 +404,6 @@ def build_clean_sheet(
     target_sheet_name: str,
     pregnancy_source_sheet_name: str,
     pregnancy_target_sheet_name: str,
-    sample_file: Path | None = None,
-    sample_sheet_names: list[str] | None = None,
 ) -> int:
     if not input_file.exists():
         print(f"ERROR: Input file not found: {input_file}")
@@ -371,7 +498,7 @@ def build_clean_sheet(
     else:
         print(f"WARNING: Pregnancy source sheet not found: {pregnancy_source_sheet_name}")
 
-    sample_added = _add_sample_sheets(out_wb, sample_file=sample_file, sample_sheet_names=sample_sheet_names)
+    created_templates = _add_default_template_sheets(out_wb)
 
     try:
         out_wb.save(output_file)
@@ -381,8 +508,8 @@ def build_clean_sheet(
 
     print(f"Done: created {output_file.name}")
     print(f"Sheets: {target_sheet_name}, {pregnancy_target_sheet_name}")
-    if sample_added:
-        print("Added sample sheets: " + ", ".join(sample_added))
+    if created_templates:
+        print("Created template sheets: " + ", ".join(created_templates))
     print("Added columns: " + ", ".join(COMPLETE_COLUMNS))
 
     return 0
@@ -390,7 +517,7 @@ def build_clean_sheet(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Create CHDN_EPI_clean.xlsx with CompleteIn quarter columns and optional sample sheets"
+        description="Create CHDN_EPI_clean.xlsx with CompleteIn quarter columns and copy all other input sheets"
     )
     parser.add_argument("--input", default=str(DEFAULT_INPUT), help="Input Excel workbook path")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Output Excel workbook path")
@@ -398,11 +525,7 @@ def main() -> int:
     parser.add_argument("--target-sheet", default=DEFAULT_TARGET_SHEET, help="New target sheet name")
     parser.add_argument("--preg-source-sheet", default=DEFAULT_PREGNANCY_SOURCE_SHEET, help="Pregnancy source sheet name")
     parser.add_argument("--preg-target-sheet", default=DEFAULT_PREGNANCY_TARGET_SHEET, help="Pregnancy target sheet name")
-    parser.add_argument("--sample-file", default=str(DEFAULT_SAMPLE_FILE), help="Sample workbook path for adding extra sheets")
-    parser.add_argument("--sample-sheets", default="", help="Comma-separated sample sheet names to add (empty = all)")
     args = parser.parse_args()
-
-    sample_sheet_names = [s.strip() for s in args.sample_sheets.split(",") if s.strip()] if args.sample_sheets else None
 
     return build_clean_sheet(
         input_file=Path(args.input),
@@ -411,8 +534,6 @@ def main() -> int:
         target_sheet_name=args.target_sheet,
         pregnancy_source_sheet_name=args.preg_source_sheet,
         pregnancy_target_sheet_name=args.preg_target_sheet,
-        sample_file=Path(args.sample_file) if args.sample_file else None,
-        sample_sheet_names=sample_sheet_names,
     )
 
 
