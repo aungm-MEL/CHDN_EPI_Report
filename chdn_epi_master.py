@@ -18,7 +18,11 @@ from openpyxl.utils import get_column_letter
 warnings.filterwarnings("ignore")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_FILE = SCRIPT_DIR / "CHDN_clean" / "CHDN_EPI_clean.xlsx"
+PRIMARY_DATA_FILE_CANDIDATES = [
+    SCRIPT_DIR / "CHDN_EPI_clean.xlsx",
+    SCRIPT_DIR / "CHDN_clean" / "CHDN_EPI_clean.xlsx",
+]
+DATA_FILE = PRIMARY_DATA_FILE_CANDIDATES[0]
 OUTPUT_FILE = SCRIPT_DIR / "CHDN dataset_long.xlsx"
 FALLBACK_DATA_FILE = SCRIPT_DIR / "CHDN dataset.xlsm"
 SECOND_FALLBACK_DATA_FILE = SCRIPT_DIR / "CHDN_dataset_copy.xlsm"
@@ -40,7 +44,7 @@ def _sheet_exists(workbook_path: Path, sheet_name: str) -> bool:
 
 def get_sheet_source_file(sheet_name: str) -> Path:
     """Resolve which source workbook should be used for a specific sheet."""
-    candidates = [DATA_FILE, FALLBACK_DATA_FILE, SECOND_FALLBACK_DATA_FILE]
+    candidates = [DATA_FILE, *PRIMARY_DATA_FILE_CANDIDATES, FALLBACK_DATA_FILE, SECOND_FALLBACK_DATA_FILE]
     for path in candidates:
         if _sheet_exists(path, sheet_name):
             if path != DATA_FILE:
@@ -51,12 +55,16 @@ def get_sheet_source_file(sheet_name: str) -> Path:
 
 def get_data_file() -> Path:
     """Get the data file, using fallback if primary is locked."""
-    if DATA_FILE.exists():
+    for primary_path in PRIMARY_DATA_FILE_CANDIDATES:
+        if not primary_path.exists():
+            continue
         try:
-            pd.read_excel(DATA_FILE, sheet_name="EPI-Child", nrows=1)
-            return DATA_FILE
+            pd.read_excel(primary_path, sheet_name="EPI-Child", nrows=1)
+            if primary_path != PRIMARY_DATA_FILE_CANDIDATES[0]:
+                print(f"Using alternate primary data file: {primary_path.name}")
+            return primary_path
         except Exception:
-            pass
+            continue
     
     if FALLBACK_DATA_FILE.exists():
         print(f"Using fallback data file: {FALLBACK_DATA_FILE.name}")
