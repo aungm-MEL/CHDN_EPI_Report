@@ -53,6 +53,40 @@ def get_sheet_source_file(sheet_name: str) -> Path:
     return DATA_FILE
 
 
+def resolve_sheet_path_and_name(
+    preferred_names: list[str],
+    fuzzy_token: str | None = None,
+) -> tuple[Path | None, str | None]:
+    """Find first available sheet by exact or fuzzy name across source candidates."""
+    candidates = [DATA_FILE, *PRIMARY_DATA_FILE_CANDIDATES, FALLBACK_DATA_FILE, SECOND_FALLBACK_DATA_FILE]
+
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            try:
+                sheetnames = list(wb.sheetnames)
+            finally:
+                wb.close()
+        except Exception:
+            continue
+
+        # Exact-match search first.
+        for sheet in preferred_names:
+            if sheet in sheetnames:
+                return path, sheet
+
+        # Then fuzzy match if requested.
+        if fuzzy_token:
+            token = fuzzy_token.lower()
+            for sheet in sheetnames:
+                if token in sheet.lower():
+                    return path, sheet
+
+    return None, None
+
+
 def get_data_file() -> Path:
     """Get the data file, using fallback if primary is locked."""
     for primary_path in PRIMARY_DATA_FILE_CANDIDATES:
@@ -1219,11 +1253,17 @@ def step_add_multi_year_indicators() -> None:
     print("Reading data...")
     child_df = pd.read_excel(OUTPUT_FILE, sheet_name="EPI-Child-long")
     td_df = pd.read_excel(OUTPUT_FILE, sheet_name="Td")
-    indicators_source = get_sheet_source_file("indicators")
-    try:
-        template_df = pd.read_excel(indicators_source, sheet_name="indicators", engine="openpyxl")
-    except ValueError:
-        template_df = pd.read_excel(indicators_source, sheet_name="2025_indicators", engine="openpyxl")
+    indicators_source, indicators_sheet = resolve_sheet_path_and_name(
+        ["indicators", "2025_indicators"],
+        fuzzy_token="indicator",
+    )
+
+    if indicators_source is None or indicators_sheet is None:
+        print("No indicators template sheet found (expected names like 'indicators' or '2025_indicators'). Skipping Step 8.")
+        return
+
+    print(f"Using indicators template sheet: {indicators_sheet} from {indicators_source.name}")
+    template_df = pd.read_excel(indicators_source, sheet_name=indicators_sheet, engine="openpyxl")
 
     print(f"EPI-Child-long shape: {child_df.shape}")
     print(f"Td shape: {td_df.shape}")
